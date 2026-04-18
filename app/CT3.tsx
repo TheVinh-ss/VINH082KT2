@@ -3,97 +3,103 @@ import { useRouter } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import React, { useEffect, useRef, useState } from "react";
 import {
-    Animated,
-    Dimensions,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  Animated,
+  Dimensions,
+  Easing,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 
 export default function CT3Screen() {
   const router = useRouter();
 
-  // State quản lý chiều rộng màn hình (cập nhật khi xoay)
-  const [screenWidth, setScreenWidth] = useState(Dimensions.get("window").width);
-
   const [text, setText] = useState("");
   const [isRunning, setIsRunning] = useState(false);
-  const [speed, setSpeed] = useState(4000);
-  const [textColor, setTextColor] = useState("#FFCC00");
+  const [speed, setSpeed] = useState(300); 
+  const [textColor, setTextColor] = useState("#00FFFF"); // Mặc định màu Cyan Neon
 
   const lastTap = useRef(0);
-  const translateX = useRef(new Animated.Value(Dimensions.get("window").width)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(1)).current; // Dùng cho hiệu ứng nhấp nháy Neon
 
-  // Lắng nghe sự kiện đổi kích thước khi người dùng tự xoay điện thoại
-  useEffect(() => {
-    const subscription = Dimensions.addEventListener("change", ({ window }) => {
-      setScreenWidth(window.width);
-    });
-    return () => subscription?.remove();
-  }, []);
+  // Bảng màu Neon cực mạnh
+  const neonColors = [
+    { name: "Cyan", code: "#00FFFF" },
+    { name: "Pink", code: "#FF00FF" },
+    { name: "Lime", code: "#39FF14" },
+    { name: "Yellow", code: "#FFF01F" },
+    { name: "Red", code: "#FF3131" },
+    { name: "Blue", code: "#1F51FF" }
+  ];
 
-  // ==========================================
-  // XỬ LÝ XOAY MÀN HÌNH THEO Ý MUỐN
-  // ==========================================
+  // Xử lý xoay màn hình
   useEffect(() => {
-    if (isRunning) {
-      ScreenOrientation.unlockAsync();
-    } else {
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    async function toggleOrientation() {
+      if (isRunning) {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+      } else {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      }
     }
-
-    return () => {
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-    };
+    toggleOrientation();
+    return () => ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
   }, [isRunning]);
 
-  const speedOptions = [
-    { label: "Chậm", value: 8000 },
-    { label: "Vừa", value: 4000 },
-    { label: "Nhanh", value: 2000 },
-  ];
-  const colorOptions = ["#FFCC00", "#FF3B30", "#34C759", "#007AFF", "#A2845E", "#FFFFFF"];
-
-  const handleRun = () => {
-    if (!text.trim()) return;
-    setIsRunning(true);
-  };
-
+  // Logic Animation
   useEffect(() => {
     if (isRunning) {
-      translateX.setValue(screenWidth);
+      const displayWidth = Math.max(Dimensions.get("window").width, Dimensions.get("window").height);
+      const distance = displayWidth * 3; 
+      const duration = (distance / speed) * 1000;
+
+      translateX.setValue(displayWidth);
+      
+      // Chạy chữ trôi
       Animated.loop(
         Animated.timing(translateX, {
-          toValue: -screenWidth * 2,
-          duration: speed,
+          toValue: -displayWidth * 2,
+          duration: duration,
+          easing: Easing.linear,
           useNativeDriver: true,
         })
       ).start();
+
+      // Nhấp nháy Neon (Glow)
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowAnim, { toValue: 0.6, duration: 800, useNativeDriver: true }),
+          Animated.timing(glowAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        ])
+      ).start();
     } else {
       translateX.stopAnimation();
+      glowAnim.setValue(1);
     }
-  }, [isRunning, speed, screenWidth]);
+  }, [isRunning, speed]);
+
+  const handleRun = () => {
+    if (!text.trim()) {
+      Alert.alert("Thông báo", "Vui lòng nhập chữ!");
+      return;
+    }
+    setIsRunning(true);
+  };
 
   const handleDoubleTap = () => {
     const now = Date.now();
-    if (now - lastTap.current < 300) {
-      setIsRunning(false);
-    } else {
-      lastTap.current = now;
-    }
+    if (now - lastTap.current < 300) setIsRunning(false);
+    else lastTap.current = now;
   };
 
-  // ==========================================
-  // GIAO DIỆN 2: CHỮ ĐANG CHẠY (MÀN HÌNH ĐEN)
-  // ==========================================
   if (isRunning) {
     return (
       <Pressable style={styles.runningContainer} onPress={handleDoubleTap}>
@@ -104,259 +110,104 @@ export default function CT3Screen() {
             {
               transform: [{ translateX }],
               color: textColor,
+              opacity: glowAnim, // Hiệu ứng nhấp nháy phát sáng
+              // Shadow tạo hiệu ứng Neon (Chỉ hoạt động mạnh trên iOS, Android dùng elevation)
+              textShadowColor: textColor,
+              textShadowOffset: { width: 0, height: 0 },
+              textShadowRadius: 20,
             },
           ]}
           numberOfLines={1}
         >
           {text}
         </Animated.Text>
-        <Text style={styles.hintText}>(Nhấn đúp vào màn hình để tắt)</Text>
+        <Text style={styles.hintText}>(Nhấn đúp để thoát)</Text>
       </Pressable>
     );
   }
 
-  // ==========================================
-  // GIAO DIỆN 1: CÀI ĐẶT
-  // ==========================================
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar hidden={false} barStyle="dark-content" />
-
-      {/* --- HEADER --- */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
           <Ionicons name="chevron-back" size={28} color="#007AFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chữ Chạy LED</Text>
+        <Text style={styles.headerTitle}>LED PRO</Text>
         <View style={styles.headerBtn} />
       </View>
 
-      {/* --- NỘI DUNG CUỘN ĐƯỢC BỌC TRÁNH BÀN PHÍM --- */}
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.card}>
-            <Text style={styles.sectionLabel}>Nội dung hiển thị</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="text-outline" size={20} color="#8E8E93" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Ví dụ: I LOVE YOU..."
-                value={text}
-                onChangeText={setText}
-                placeholderTextColor="#C7C7CC"
-              />
-            </View>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>Nội dung </Text>
+          <TextInput
+            style={styles.input}
+            placeholder="NHẬP CHỮ Ở ĐÂY..."
+            value={text}
+            onChangeText={setText}
+            placeholderTextColor="#C7C7CC"
+          />
 
-            <Text style={styles.sectionLabel}>Tốc độ chạy</Text>
-            <View style={styles.segmentedControl}>
-              {speedOptions.map((opt) => {
-                const isActive = speed === opt.value;
-                return (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[styles.segmentBtn, isActive && styles.segmentBtnActive]}
-                    onPress={() => setSpeed(opt.value)}
-                  >
-                    <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={styles.sectionLabel}>Màu sắc chữ</Text>
-            <View style={styles.colorRow}>
-              {colorOptions.map((color) => {
-                const isActive = textColor === color;
-                const isWhite = color === "#FFFFFF";
-                return (
-                  <TouchableOpacity
-                    key={color}
-                    style={[
-                      styles.colorCircle,
-                      { backgroundColor: color },
-                      isWhite && { borderWidth: 1, borderColor: "#D1D1D6" },
-                      isActive && styles.colorCircleActive,
-                    ]}
-                    onPress={() => setTextColor(color)}
-                  >
-                    {isActive && (
-                      <Ionicons name="checkmark" size={20} color={isWhite ? "#000" : "#FFF"} />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+          <Text style={styles.sectionLabel}>Chọn màu</Text>
+          <View style={styles.colorRow}>
+            {neonColors.map((item) => (
+              <TouchableOpacity
+                key={item.code}
+                style={[
+                  styles.colorCircle, 
+                  { backgroundColor: item.code, shadowColor: item.code, elevation: textColor === item.code ? 10 : 0 },
+                  textColor === item.code && { borderWidth: 3, borderColor: '#000' }
+                ]}
+                onPress={() => setTextColor(item.code)}
+              >
+                {textColor === item.code && <Ionicons name="flash" size={18} color="white" />}
+              </TouchableOpacity>
+            ))}
           </View>
 
-          <TouchableOpacity
-            style={[styles.runBtn, !text.trim() && styles.runBtnDisabled]}
-            onPress={handleRun}
-            disabled={!text.trim()}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="play" size={24} color="#fff" style={{ marginRight: 8 }} />
-            <Text style={styles.runBtnText}>Bắt Đầu Chạy</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <Text style={styles.sectionLabel}>Tốc độ trôi</Text>
+          <View style={styles.speedContainer}>
+            {[150, 300, 600].map((v, i) => (
+              <TouchableOpacity 
+                key={v} 
+                style={[styles.speedBtn, speed === v && { backgroundColor: textColor }]} 
+                onPress={() => setSpeed(v)}
+              >
+                <Text style={[styles.speedBtnText, speed === v && { color: '#000' }]}>
+                  {i === 0 ? "Chậm" : i === 1 ? "Vừa" : "Nhanh"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <TouchableOpacity 
+          style={[styles.runBtn, { backgroundColor: textColor, shadowColor: textColor }]} 
+          onPress={handleRun}
+        >
+          <Text style={styles.runBtnText}>BẮT ĐẦU</Text>
+        </TouchableOpacity>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F2F2F7",
-    // Fallback cho Android vì SafeAreaView chỉ hoạt động mặc định trên iOS
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0, 
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 10, // Bỏ paddingTop cứng, dùng paddingVertical để luôn cân đối
-    backgroundColor: "#F2F2F7",
-    zIndex: 10,
-  },
-  headerBtn: {
-    width: 40,
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1C1C1E",
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 40,
-  },
-  card: {
-    backgroundColor: "#FFF",
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
-    marginBottom: 25,
-  },
-  sectionLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#8E8E93",
-    marginBottom: 10,
-    marginTop: 5,
-  },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F2F2F7",
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 25,
-    height: 50,
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: "#1C1C1E",
-    height: "100%",
-  },
-  segmentedControl: {
-    flexDirection: "row",
-    backgroundColor: "#E5E5EA",
-    borderRadius: 10,
-    padding: 3,
-    marginBottom: 25,
-    height: 40,
-  },
-  segmentBtn: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 8,
-  },
-  segmentBtnActive: {
-    backgroundColor: "#FFF",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  segmentText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#1C1C1E",
-  },
-  segmentTextActive: {
-    fontWeight: "600",
-  },
-  colorRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 10,
-  },
-  colorCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  colorCircleActive: {
-    transform: [{ scale: 1.15 }],
-  },
-  runBtn: {
-    flexDirection: "row",
-    backgroundColor: "#007AFF",
-    paddingVertical: 16,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#007AFF",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  runBtnDisabled: {
-    backgroundColor: "#B0D4FF",
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  runBtnText: {
-    color: "#FFF",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  runningContainer: {
-    flex: 1,
-    backgroundColor: "#000",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  runningText: {
-    fontSize: 140,
-    fontWeight: "900",
-  },
-  hintText: {
-    color: "rgba(255,255,255,0.3)",
-    position: "absolute",
-    bottom: 30,
-    alignSelf: "center",
-    fontSize: 14,
-  },
+  safeArea: { flex: 1, backgroundColor: "#000", paddingTop: Platform.OS === "android" ? 35 : 0 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 15, backgroundColor: '#1A1A1A' },
+  headerBtn: { width: 40 },
+  headerTitle: { fontSize: 20, fontWeight: "bold", color: "#FFF" },
+  scrollContent: { padding: 20 },
+  card: { backgroundColor: "#1A1A1A", borderRadius: 24, padding: 20, marginBottom: 25 },
+  sectionLabel: { fontSize: 13, color: "#8E8E93", marginBottom: 15, marginTop: 15, fontWeight: "700" },
+  input: { backgroundColor: "#333", borderRadius: 12, padding: 15, fontSize: 18, color: "#FFF", borderBottomWidth: 2, borderBottomColor: '#555' },
+  colorRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
+  colorCircle: { width: 45, height: 45, borderRadius: 22.5, justifyContent: "center", alignItems: "center", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 10 },
+  speedContainer: { flexDirection: "row", justifyContent: "space-between", marginTop: 10 },
+  speedBtn: { flex: 1, paddingVertical: 12, alignItems: "center", backgroundColor: "#333", marginHorizontal: 5, borderRadius: 12 },
+  speedBtnText: { color: "#FFF", fontWeight: "bold" },
+  runBtn: { padding: 20, borderRadius: 20, alignItems: "center", marginTop: 20, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 15, elevation: 10 },
+  runBtnText: { color: "#000", fontSize: 20, fontWeight: "900" },
+  runningContainer: { flex: 1, backgroundColor: "#000", justifyContent: "center" },
+  runningText: { fontSize: 180, fontWeight: "900", fontStyle: 'italic' },
+  hintText: { color: "#333", position: "absolute", bottom: 20, alignSelf: "center" }
 });
